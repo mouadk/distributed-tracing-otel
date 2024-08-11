@@ -1,0 +1,3 @@
+- helm repo add bitnami https://charts.bitnami.com/bitnami 
+- helm install postgres bitnami/postgresql
+- refer to https://github.com/bitnami/charts/blob/main/bitnami/postgresql/README.md

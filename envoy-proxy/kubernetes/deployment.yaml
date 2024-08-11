@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: envoy-proxy
+  template:
+    metadata:
+      labels:
+        app: envoy-proxy
+    spec:
+      containers:
+        - name: envoy-proxy
+          imagePullPolicy: IfNotPresent
+          image: tracing-demo-envoy_proxy
+          ports:
+            - containerPort: 10000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-proxy
+spec:
+  ports:
+    - name: envoy-proxy
+      port: 10000
+      targetPort: 10000
+  selector:
+    app: envoy-proxy

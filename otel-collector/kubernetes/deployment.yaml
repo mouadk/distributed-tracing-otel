@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+        - name: otel-collector
+          image: tracing-demo-otel
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/etc/otel-collector-config-k8s.yaml"
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 55679
+          volumeMounts:
+            - name: otel-collector-config-vol
+              mountPath: /etc/otel-collector-config-k8s.yaml
+              subPath: otel-collector-config-k8s.yaml
+      volumes:
+        - name: otel-collector-config-vol
+          configMap:
+            name: otel-collector-config
+            items:
+              - key: otel-collector-config-k8s.yaml
+                path: otel-collector-config-k8s.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+spec:
+  ports:
+    - name: grpc
+      port: 4317
+      targetPort: 4317
+    - name: http
+      port: 4318
+      targetPort: 4318
+    - name: zpages
+      port: 55679
+      targetPort: 55679
+  selector:
+    app: otel-collector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "pods", "namespaces" ]
+    verbs: [ "get", "watch", "list" ]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: otel-collector
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: default
+data:
+  otel-collector-config-k8s.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+          grpc:
+            endpoint: 0.0.0.0:4317
+
+    processors:
+      k8sattributes:
+        passthrough: false
+        auth_type: serviceAccount
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+    extensions:
+      memory_ballast:
+        size_mib: 512
+      zpages:
+        endpoint: 0.0.0.0:55679
+      health_check: {}
+
+    exporters:
+      logging:
+        loglevel: debug
+      otlp:
+        endpoint: jaeger-all-in-one:4317
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [k8sattributes]
+          exporters: [logging]
+        traces:
+          receivers: [otlp]
+          processors: [k8sattributes]
+          exporters: [otlp, logging]
+        logs:
+          receivers: [otlp]
+          processors: [k8sattributes]
+          exporters: [otlp, logging]
+      extensions: [memory_ballast, zpages, health_check]

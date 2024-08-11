@@ -1,0 +1,3 @@
+- helm repo add bitnami https://charts.bitnami.com/bitnami 
+- helm install my-kafka bitnami/kafka -f values.yaml
+- refer to https://github.com/bitnami/charts/blob/main/bitnami/kafka/README.md

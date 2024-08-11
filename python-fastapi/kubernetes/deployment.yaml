@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-fastapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-fastapi
+  template:
+    metadata:
+      labels:
+        app: python-fastapi
+    spec:
+      containers:
+        - name: python
+          image:  tracing-demo-python-fastapi
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_HOST
+              value: postgres-postgresql.default.svc.cluster.local
+            - name: POSTGRES_PASSWORD
+              value: UwqX3rjI9f
+            - name: POSTGRES_DB
+              value: postgres
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: my-kafka.default.svc.cluster.local:9092
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: service.name=python-fastapi
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4317
+            - name: OTEL_LOG_LEVEL
+              value: info
+            - name: HELLO_SERVICE
+              value: http://quarkus-rest:8787/hello
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-fastapi
+spec:
+  ports:
+    - port: 8001
+      targetPort: 8001
+  selector:
+    app: python-fastapi

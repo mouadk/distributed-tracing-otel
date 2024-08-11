@@ -1,0 +1,102 @@
+version: "2"
+
+services:
+  jaeger-all-in-one: # https://github.com/jaegertracing/jaeger/tree/main/examples/hotrod
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger-all-in-one
+    restart: always
+    ports:
+      - "16686:16686"
+      - "14268"
+      - "14250"
+  otel:
+    container_name: otel-collector
+    build:
+      context: ./otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"  # gRPC
+      - "4318:4318"  # HTTP
+      - "55679:55679"
+  envoy_proxy:
+    build:
+      context: ./envoy-proxy
+    ports:
+      - "10000:10000"
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=db
+      - POSTGRES_USER=momo
+      - POSTGRES_PASSWORD=changeme
+    ports:
+      - "5432:5432"
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    container_name: zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: yes
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+  python-fastapi:
+    build:
+      context: ./python-fastapi
+    container_name: python-fastapi
+    ports:
+      - "8001:8001"
+    environment:
+      - HELLO_SERVICE=http://quarkus-rest:8787/hello
+      - POSTGRES_USER=momo
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=db
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=test-topic
+      - KAFKA_GROUP_ID=test-group
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=python-fastapi
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_LOG_LEVEL=info
+    depends_on:
+      - kafka
+      - postgres
+  java-springwebflux:
+    build:
+      context: ./java-springwebflux
+    container_name: java-springwebflux
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+      OTEL_SERVICE_NAME: "java-spring-webflux"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+  quarkus-rest:
+    build:
+      context: ./quarkus-rest
+      dockerfile: Dockerfile
+    container_name: quarkus-rest
+    ports:
+      - "8787:8787"
+    environment:
+      - QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - otel

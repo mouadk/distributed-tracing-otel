@@ -1,6 +1,6 @@
 # Distributed Tracing Demo
 
-This is PoC project demonstrating how to achieve distributed tracing using invasive (OTel) and non invasive (ebpf) tools. 
+This is PoC project demonstrating how to achieve distributed tracing using OTel. 
 The workload is very simple (depicted below). You can use it to deep dive into how context propagation and distributed tracing can be achieved.
 
 ![workload.png](images%2Fworkload.png)
